@@ -14,6 +14,11 @@ import {
   Position,
   NodeProps,
   MarkerType,
+  EdgeProps,
+  BaseEdge,
+  getBezierPath,
+  EdgeLabelRenderer,
+  useInternalNode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useProjectStore } from '@/stores/projectStore';
@@ -178,8 +183,120 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
   );
 };
 
-// Node types defined outside component to prevent re-creation
+// ======== Dynamic Shortest-Path / Floating Edge ========
+// Tự động tính toán điểm neo gần nhất giữa 2 nút để đường nối luôn ngắn và tự nhiên nhất
+function getClosestHandles(sourceNode: any, targetNode: any) {
+  const posA = sourceNode.internals?.positionAbsolute ?? sourceNode.position ?? { x: 0, y: 0 };
+  const wA = sourceNode.measured?.width ?? sourceNode.width ?? 180;
+  const hA = sourceNode.measured?.height ?? sourceNode.height ?? 56;
+  const leftA = posA.x;
+  const topA = posA.y;
+  const cxA = leftA + wA / 2;
+  const cyA = topA + hA / 2;
+  const rightA = leftA + wA;
+  const bottomA = topA + hA;
+
+  const handlesA = [
+    { x: cxA, y: topA, position: Position.Top },
+    { x: cxA, y: bottomA, position: Position.Bottom },
+    { x: leftA, y: cyA, position: Position.Left },
+    { x: rightA, y: cyA, position: Position.Right },
+  ];
+
+  const posB = targetNode.internals?.positionAbsolute ?? targetNode.position ?? { x: 0, y: 0 };
+  const wB = targetNode.measured?.width ?? targetNode.width ?? 180;
+  const hB = targetNode.measured?.height ?? targetNode.height ?? 56;
+  const leftB = posB.x;
+  const topB = posB.y;
+  const cxB = leftB + wB / 2;
+  const cyB = topB + hB / 2;
+  const rightB = leftB + wB;
+  const bottomB = topB + hB;
+
+  const handlesB = [
+    { x: cxB, y: topB, position: Position.Top },
+    { x: cxB, y: bottomB, position: Position.Bottom },
+    { x: leftB, y: cyB, position: Position.Left },
+    { x: rightB, y: cyB, position: Position.Right },
+  ];
+
+  let minDist = Infinity;
+  let bestA = handlesA[0];
+  let bestB = handlesB[0];
+
+  for (const a of handlesA) {
+    for (const b of handlesB) {
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < minDist) {
+        minDist = d;
+        bestA = a;
+        bestB = b;
+      }
+    }
+  }
+
+  return { sourceHandle: bestA, targetHandle: bestB };
+}
+
+const FloatingEdge: React.FC<EdgeProps> = ({
+  id,
+  source,
+  target,
+  markerEnd,
+  style,
+  data,
+  label,
+}) => {
+  const sourceNode = useInternalNode(source);
+  const targetNode = useInternalNode(target);
+
+  if (!sourceNode || !targetNode) {
+    return null;
+  }
+
+  const { sourceHandle, targetHandle } = getClosestHandles(sourceNode, targetNode);
+
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX: sourceHandle.x,
+    sourceY: sourceHandle.y,
+    sourcePosition: sourceHandle.position,
+    targetX: targetHandle.x,
+    targetY: targetHandle.y,
+    targetPosition: targetHandle.position,
+  });
+
+  const edgeLabel = label || (data as any)?.label;
+
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={style}
+        markerEnd={markerEnd}
+      />
+      {edgeLabel && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs text-[var(--color-ink-primary)] select-none cursor-pointer hover:border-[var(--color-accent)] transition-all"
+            title="Nhấp đúp vào đường nối hoặc nhãn để chỉnh sửa quan hệ"
+          >
+            {edgeLabel}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+};
+
+// Node & Edge types defined outside component to prevent re-creation
 const NODE_TYPES = { concept: ConceptNode };
+const EDGE_TYPES = { floating: FloatingEdge };
 
 // Helpers to compute initial state ONCE
 const getInitialNodes = (project: Project): Node[] => {
@@ -238,6 +355,7 @@ const getInitialEdges = (project: Project): Edge[] => {
       id: String(e.id),
       source: String(e.source),
       target: String(e.target),
+      type: 'floating',
       label: e.label || '',
       animated: e.animated || e.relationshipType === 'evolution',
       style: { stroke: edgeColor, strokeWidth: 2 },
@@ -387,6 +505,7 @@ export const WorldBibleDiagram: React.FC = () => {
         id: `edge-${uuidv4()}`,
         source: pendingConnection.source!,
         target: pendingConnection.target!,
+        type: 'floating',
         sourceHandle: pendingConnection.sourceHandle,
         targetHandle: pendingConnection.targetHandle,
         label: edgeLabel.trim(),
@@ -445,6 +564,7 @@ export const WorldBibleDiagram: React.FC = () => {
         ed.id === editingEdge.id
           ? {
               ...ed,
+              type: 'floating',
               label: edgeLabel.trim(),
               animated: edgeRelType === 'evolution',
               style: { stroke: edgeColor, strokeWidth: 2 },
@@ -729,6 +849,8 @@ export const WorldBibleDiagram: React.FC = () => {
           nodes={filteredNodes}
           edges={filteredEdges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
+          defaultEdgeOptions={{ type: 'floating' }}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
