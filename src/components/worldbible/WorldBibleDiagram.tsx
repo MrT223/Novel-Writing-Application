@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
+  Project,
   WorldBibleDiagramNode,
   WorldBibleDiagramEdge,
 } from '@/types';
@@ -177,6 +178,90 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
   );
 };
 
+// Node types defined outside component to prevent re-creation
+const NODE_TYPES = { concept: ConceptNode };
+
+// Helpers to compute initial state ONCE
+const getInitialNodes = (project: Project): Node[] => {
+  const savedNodes = project.worldBibleDiagram?.nodes;
+  if (savedNodes && savedNodes.length > 0) {
+    return savedNodes.map((n) => ({
+      id: String(n.id),
+      type: 'concept',
+      position: n.position || { x: 300, y: 200 },
+      data: {
+        label: n.data?.label || 'Chưa đặt tên',
+        domain: n.data?.domain || 'world-building',
+        color: n.data?.color,
+        description: n.data?.description,
+        categoryId: n.data?.categoryId,
+      },
+    }));
+  }
+
+  const categories = project.extractedCategories || [];
+  const total = categories.length || 1;
+  return categories.map((cat, index) => {
+    const angle = (index / total) * 2 * Math.PI;
+    const radius = Math.max(220, total * 45);
+    const x = 450 + radius * Math.cos(angle);
+    const y = 350 + radius * Math.sin(angle);
+
+    return {
+      id: String(cat.id || uuidv4()),
+      type: 'concept',
+      position: { x, y },
+      data: {
+        label: cat.name || 'Danh mục',
+        domain: cat.domain || 'world-building',
+        color: undefined,
+        description: undefined,
+        categoryId: cat.id,
+      },
+    };
+  });
+};
+
+const getInitialEdges = (project: Project): Edge[] => {
+  const savedEdges = project.worldBibleDiagram?.edges;
+  if (!savedEdges || savedEdges.length === 0) return [];
+
+  return savedEdges.map((e) => {
+    const relType = RELATIONSHIP_TYPES.find((r) => r.value === e.relationshipType);
+    const edgeColor = e.color || relType?.color || '#6B7280';
+    const isDirected =
+      e.relationshipType === 'parent-child' ||
+      e.relationshipType === 'evolution' ||
+      e.relationshipType === 'dependency';
+
+    return {
+      id: String(e.id),
+      source: String(e.source),
+      target: String(e.target),
+      label: e.label || '',
+      animated: e.animated || e.relationshipType === 'evolution',
+      style: { stroke: edgeColor, strokeWidth: 2 },
+      labelStyle: { fill: 'var(--color-ink-primary)', fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.95 },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 6,
+      markerEnd: isDirected
+        ? {
+            type: MarkerType.ArrowClosed,
+            color: edgeColor,
+            width: 16,
+            height: 16,
+          }
+        : undefined,
+      data: {
+        label: e.label || '',
+        relationshipType: e.relationshipType,
+        color: edgeColor,
+      },
+    };
+  });
+};
+
 // ======== Main Component ========
 export const WorldBibleDiagram: React.FC = () => {
   const { project, updateProject } = useProjectStore();
@@ -202,112 +287,21 @@ export const WorldBibleDiagram: React.FC = () => {
   // Editing node state
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingNodeLabel, setEditingNodeLabel] = useState('');
+  const [savedFeedback, setSavedFeedback] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const nodeTypes = useMemo(() => ({ concept: ConceptNode }), []);
+  // Initialize once on mount with useMemo
+  const initialNodes = useMemo(() => getInitialNodes(project), []);
+  const initialEdges = useMemo(() => getInitialEdges(project), []);
 
-  // Build initial nodes from saved diagram data + extracted categories
-  const diagramData = project.worldBibleDiagram || { nodes: [], edges: [] };
-  const categories = project.extractedCategories || [];
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  const buildInitialNodes = useCallback((): Node[] => {
-    const savedNodes = diagramData?.nodes || [];
-    if (savedNodes.length > 0) {
-      return savedNodes.map((n) => ({
-        id: String(n.id),
-        type: 'concept',
-        position: n.position || { x: 300, y: 200 },
-        data: {
-          label: n.data?.label || 'Chưa đặt tên',
-          domain: n.data?.domain || 'world-building',
-          color: n.data?.color,
-          description: n.data?.description,
-          categoryId: n.data?.categoryId,
-        },
-      }));
-    }
-
-    // Auto-generate from extracted categories if no saved nodes
-    const total = categories.length || 1;
-    return categories.map((cat, index) => {
-      const angle = (index / total) * 2 * Math.PI;
-      const radius = Math.max(220, total * 45);
-      const x = 450 + radius * Math.cos(angle);
-      const y = 350 + radius * Math.sin(angle);
-
-      return {
-        id: String(cat.id || uuidv4()),
-        type: 'concept',
-        position: { x, y },
-        data: {
-          label: cat.name || 'Danh mục',
-          domain: cat.domain || 'world-building',
-          color: undefined,
-          description: undefined,
-          categoryId: cat.id,
-        },
-      };
-    });
-  }, [diagramData?.nodes, categories]);
-
-  const buildInitialEdges = useCallback((): Edge[] => {
-    const savedEdges = diagramData?.edges || [];
-    return savedEdges.map((e) => {
-      const relType = RELATIONSHIP_TYPES.find((r) => r.value === e.relationshipType);
-      const edgeColor = e.color || relType?.color || '#6B7280';
-      const isDirected =
-        e.relationshipType === 'parent-child' ||
-        e.relationshipType === 'evolution' ||
-        e.relationshipType === 'dependency';
-
-      return {
-        id: String(e.id),
-        source: String(e.source),
-        target: String(e.target),
-        label: e.label || '',
-        animated: e.animated || e.relationshipType === 'evolution',
-        style: { stroke: edgeColor, strokeWidth: 2 },
-        labelStyle: { fill: 'var(--color-ink-primary)', fontSize: 11, fontWeight: 600 },
-        labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.95 },
-        labelBgPadding: [6, 3] as [number, number],
-        labelBgBorderRadius: 6,
-        markerEnd: isDirected
-          ? {
-              type: MarkerType.ArrowClosed,
-              color: edgeColor,
-              width: 16,
-              height: 16,
-            }
-          : undefined,
-        data: {
-          label: e.label || '',
-          relationshipType: e.relationshipType,
-          color: edgeColor,
-        },
-      };
-    });
-  }, [diagramData?.edges]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(buildInitialNodes());
-  const [edges, setEdges, onEdgesChange] = useEdgesState(buildInitialEdges());
-  const isInternalUpdateRef = useRef(false);
-
-  // Sync when diagramData changes (from external or project load)
-  useEffect(() => {
-    if (isInternalUpdateRef.current) {
-      isInternalUpdateRef.current = false;
-      return;
-    }
-    setNodes(buildInitialNodes());
-  }, [buildInitialNodes, setNodes]);
-
-  useEffect(() => {
-    if (isInternalUpdateRef.current) {
-      isInternalUpdateRef.current = false;
-      return;
-    }
-    setEdges(buildInitialEdges());
-  }, [buildInitialEdges, setEdges]);
+  // Keep refs for unmount save
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  nodesRef.current = nodes;
+  edgesRef.current = edges;
 
   // Filter nodes by domain
   const visibleNodeIds = useMemo(() => {
@@ -329,46 +323,45 @@ export const WorldBibleDiagram: React.FC = () => {
   );
 
   // ---- Save to project ----
-  const saveDiagram = useCallback(() => {
-    isInternalUpdateRef.current = true;
-    const diagramNodes: WorldBibleDiagramNode[] = nodes.map((n) => ({
-      id: n.id,
-      position: n.position,
-      data: {
-        label: (n.data as any)?.label || '',
-        domain: (n.data as any)?.domain || 'world-building',
-        color: (n.data as any)?.color,
-        description: (n.data as any)?.description,
-        categoryId: (n.data as any)?.categoryId,
-      },
-    }));
+  const saveDiagram = useCallback(
+    (currentNodes: Node[], currentEdges: Edge[]) => {
+      const diagramNodes: WorldBibleDiagramNode[] = currentNodes.map((n) => ({
+        id: n.id,
+        position: n.position,
+        data: {
+          label: (n.data as any)?.label || '',
+          domain: (n.data as any)?.domain || 'world-building',
+          color: (n.data as any)?.color,
+          description: (n.data as any)?.description,
+          categoryId: (n.data as any)?.categoryId,
+        },
+      }));
 
-    const diagramEdges: WorldBibleDiagramEdge[] = edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      label: (e.data as any)?.label || (e.label as string) || '',
-      relationshipType: (e.data as any)?.relationshipType || 'related',
-      color: (e.data as any)?.color,
-      animated: e.animated,
-    }));
+      const diagramEdges: WorldBibleDiagramEdge[] = currentEdges.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        label: (e.data as any)?.label || (e.label as string) || '',
+        relationshipType: (e.data as any)?.relationshipType || 'related',
+        color: (e.data as any)?.color,
+        animated: e.animated,
+      }));
 
-    updateProject({
-      worldBibleDiagram: { nodes: diagramNodes, edges: diagramEdges },
-    });
-  }, [nodes, edges, updateProject]);
+      updateProject({
+        worldBibleDiagram: { nodes: diagramNodes, edges: diagramEdges },
+      });
+      setSavedFeedback(true);
+      setTimeout(() => setSavedFeedback(false), 2000);
+    },
+    [updateProject]
+  );
 
-  // Auto-save on changes (debounced)
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Auto-save on unmount
   useEffect(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      saveDiagram();
-    }, 1500);
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveDiagram(nodesRef.current, edgesRef.current);
     };
-  }, [nodes, edges, saveDiagram]);
+  }, [saveDiagram]);
 
   // ---- Connection handler: open modal to name the relationship ----
   const onConnect = useCallback((params: Connection) => {
@@ -418,11 +411,13 @@ export const WorldBibleDiagram: React.FC = () => {
         },
       };
 
-      setEdges((eds) => [...eds, newEdge]);
+      const updatedEdges = [...edges, newEdge];
+      setEdges(updatedEdges);
       setShowEdgeModal(false);
       setPendingConnection(null);
+      saveDiagram(nodes, updatedEdges);
     },
-    [pendingConnection, edgeLabel, edgeRelType, setEdges]
+    [pendingConnection, edgeLabel, edgeRelType, edges, nodes, setEdges, saveDiagram]
   );
 
   // ---- Edit edge on double-click ----
@@ -446,43 +441,46 @@ export const WorldBibleDiagram: React.FC = () => {
         edgeRelType === 'evolution' ||
         edgeRelType === 'dependency';
 
-      setEdges((eds) =>
-        eds.map((ed) =>
-          ed.id === editingEdge.id
-            ? {
-                ...ed,
+      const updatedEdges = edges.map((ed) =>
+        ed.id === editingEdge.id
+          ? {
+              ...ed,
+              label: edgeLabel.trim(),
+              animated: edgeRelType === 'evolution',
+              style: { stroke: edgeColor, strokeWidth: 2 },
+              markerEnd: isDirected
+                ? {
+                    type: MarkerType.ArrowClosed,
+                    color: edgeColor,
+                    width: 16,
+                    height: 16,
+                  }
+                : undefined,
+              data: {
                 label: edgeLabel.trim(),
-                animated: edgeRelType === 'evolution',
-                style: { stroke: edgeColor, strokeWidth: 2 },
-                markerEnd: isDirected
-                  ? {
-                      type: MarkerType.ArrowClosed,
-                      color: edgeColor,
-                      width: 16,
-                      height: 16,
-                    }
-                  : undefined,
-                data: {
-                  label: edgeLabel.trim(),
-                  relationshipType: edgeRelType,
-                  color: edgeColor,
-                },
-              }
-            : ed
-        )
+                relationshipType: edgeRelType,
+                color: edgeColor,
+              },
+            }
+          : ed
       );
+
+      setEdges(updatedEdges);
       setShowEdgeModal(false);
       setEditingEdge(null);
+      saveDiagram(nodes, updatedEdges);
     },
-    [editingEdge, edgeLabel, edgeRelType, setEdges]
+    [editingEdge, edgeLabel, edgeRelType, edges, nodes, setEdges, saveDiagram]
   );
 
   const handleDeleteEdge = useCallback(() => {
     if (!editingEdge) return;
-    setEdges((eds) => eds.filter((ed) => ed.id !== editingEdge.id));
+    const updatedEdges = edges.filter((ed) => ed.id !== editingEdge.id);
+    setEdges(updatedEdges);
     setShowEdgeModal(false);
     setEditingEdge(null);
-  }, [editingEdge, setEdges]);
+    saveDiagram(nodes, updatedEdges);
+  }, [editingEdge, edges, nodes, setEdges, saveDiagram]);
 
   // ---- Add new concept node ----
   const handleAddNode = useCallback(
@@ -494,8 +492,8 @@ export const WorldBibleDiagram: React.FC = () => {
         id: uuidv4(),
         type: 'concept',
         position: {
-          x: 300 + Math.random() * 300,
-          y: 200 + Math.random() * 250,
+          x: 350 + Math.random() * 250,
+          y: 250 + Math.random() * 200,
         },
         data: {
           label: newNodeLabel.trim(),
@@ -506,16 +504,19 @@ export const WorldBibleDiagram: React.FC = () => {
         },
       };
 
-      setNodes((nds) => [...nds, newNode]);
+      const updatedNodes = [...nodes, newNode];
+      setNodes(updatedNodes);
       setNewNodeLabel('');
       setNewNodeDescription('');
       setShowAddModal(false);
+      saveDiagram(updatedNodes, edges);
     },
-    [newNodeLabel, newNodeDomain, newNodeDescription, setNodes]
+    [newNodeLabel, newNodeDomain, newNodeDescription, nodes, edges, setNodes, saveDiagram]
   );
 
   // ---- Sync categories into diagram (import missing categories as nodes) ----
   const handleSyncCategories = useCallback(() => {
+    const categories = project.extractedCategories || [];
     const existingCatIds = new Set(
       nodes.map((n) => (n.data as any)?.categoryId).filter(Boolean)
     );
@@ -541,9 +542,11 @@ export const WorldBibleDiagram: React.FC = () => {
       });
 
     if (newCatNodes.length > 0) {
-      setNodes((nds) => [...nds, ...newCatNodes]);
+      const updatedNodes = [...nodes, ...newCatNodes];
+      setNodes(updatedNodes);
+      saveDiagram(updatedNodes, edges);
     }
-  }, [categories, nodes, setNodes]);
+  }, [project.extractedCategories, nodes, edges, setNodes, saveDiagram]);
 
   // ---- Delete selected nodes ----
   const handleDeleteSelected = useCallback(() => {
@@ -551,11 +554,14 @@ export const WorldBibleDiagram: React.FC = () => {
     if (selectedNodeIds.size === 0) return;
     if (!confirm(`Xoá ${selectedNodeIds.size} nút đã chọn?`)) return;
 
-    setNodes((nds) => nds.filter((n) => !selectedNodeIds.has(n.id)));
-    setEdges((eds) =>
-      eds.filter((e) => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target))
+    const updatedNodes = nodes.filter((n) => !selectedNodeIds.has(n.id));
+    const updatedEdges = edges.filter(
+      (e) => !selectedNodeIds.has(e.source) && !selectedNodeIds.has(e.target)
     );
-  }, [nodes, setNodes, setEdges]);
+    setNodes(updatedNodes);
+    setEdges(updatedEdges);
+    saveDiagram(updatedNodes, updatedEdges);
+  }, [nodes, edges, setNodes, setEdges, saveDiagram]);
 
   // ---- Rename node on double-click ----
   const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
@@ -569,15 +575,15 @@ export const WorldBibleDiagram: React.FC = () => {
       setEditingNodeId(null);
       return;
     }
-    setNodes((nds) =>
-      nds.map((n) =>
-        n.id === editingNodeId
-          ? { ...n, data: { ...n.data, label: editingNodeLabel.trim() } }
-          : n
-      )
+    const updatedNodes = nodes.map((n) =>
+      n.id === editingNodeId
+        ? { ...n, data: { ...n.data, label: editingNodeLabel.trim() } }
+        : n
     );
+    setNodes(updatedNodes);
     setEditingNodeId(null);
-  }, [editingNodeId, editingNodeLabel, setNodes]);
+    saveDiagram(updatedNodes, edges);
+  }, [editingNodeId, editingNodeLabel, nodes, edges, setNodes, saveDiagram]);
 
   // Count stats
   const totalNodes = nodes.length;
@@ -639,23 +645,30 @@ export const WorldBibleDiagram: React.FC = () => {
         {/* Reset */}
         <button
           onClick={() => {
-            setNodes(buildInitialNodes());
-            setEdges(buildInitialEdges());
+            const freshNodes = getInitialNodes(project);
+            const freshEdges = getInitialEdges(project);
+            setNodes(freshNodes);
+            setEdges(freshEdges);
+            saveDiagram(freshNodes, freshEdges);
           }}
           className="p-1.5 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-secondary)]"
-          title="Tự động reset layout"
+          title="Tự động sắp xếp lại layout ban đầu"
         >
           <RotateCcw size={14} />
         </button>
 
         {/* Save */}
         <button
-          onClick={saveDiagram}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-border)] hover:border-green-500 text-xs font-medium text-green-600 transition-all"
+          onClick={() => saveDiagram(nodes, edges)}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-medium transition-all ${
+            savedFeedback
+              ? 'bg-green-500/10 border-green-500 text-green-600 font-bold'
+              : 'bg-[var(--color-canvas)] border-[var(--color-border)] hover:border-green-500 text-green-600'
+          }`}
           title="Lưu sơ đồ ngay"
         >
-          <Save size={13} />
-          Lưu
+          {savedFeedback ? <Check size={13} /> : <Save size={13} />}
+          {savedFeedback ? 'Đã Lưu!' : 'Lưu'}
         </button>
 
         {/* Switch to Matrix Table View */}
@@ -715,12 +728,13 @@ export const WorldBibleDiagram: React.FC = () => {
         <ReactFlow
           nodes={filteredNodes}
           edges={filteredEdges}
-          nodeTypes={nodeTypes}
+          nodeTypes={NODE_TYPES}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeDoubleClick={onEdgeDoubleClick}
           onNodeDoubleClick={onNodeDoubleClick}
+          onNodeDragStop={() => saveDiagram(nodes, edges)}
           fitView
           deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode="Shift"
