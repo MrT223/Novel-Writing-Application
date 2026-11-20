@@ -6,7 +6,6 @@ import {
   Background,
   useNodesState,
   useEdgesState,
-  addEdge,
   Connection,
   Edge,
   Node,
@@ -14,10 +13,6 @@ import {
   Handle,
   Position,
   NodeProps,
-  EdgeProps,
-  EdgeLabelRenderer,
-  getBezierPath,
-  BaseEdge,
   MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -37,7 +32,6 @@ import {
   Network,
   Link2,
   Save,
-  ArrowDownUp,
   Sparkles,
   Table,
 } from 'lucide-react';
@@ -45,11 +39,19 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   WorldBibleDiagramNode,
   WorldBibleDiagramEdge,
-  ExtractedCategoryItem,
 } from '@/types';
 
 // ======== Domain color and icon helpers ========
-const DOMAIN_CONFIG = {
+const DOMAIN_CONFIG: Record<
+  string,
+  {
+    color: string;
+    bgColor: string;
+    borderColor: string;
+    label: string;
+    icon: React.ComponentType<{ size?: number; className?: string }>;
+  }
+> = {
   'power-system': {
     color: '#D97706',
     bgColor: 'rgba(217, 119, 6, 0.08)',
@@ -99,11 +101,15 @@ interface ConceptNodeData extends Record<string, unknown> {
 }
 
 const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
-  const nodeData = data as unknown as ConceptNodeData;
-  const domainCfg =
-    DOMAIN_CONFIG[nodeData.domain] || DOMAIN_CONFIG['world-building'];
-  const IconComponent = domainCfg.icon;
-  const nodeColor = nodeData.color || domainCfg.color;
+  const nodeData = (data || {}) as unknown as ConceptNodeData;
+  const domainKey =
+    nodeData?.domain && DOMAIN_CONFIG[nodeData.domain]
+      ? nodeData.domain
+      : 'world-building';
+  const domainCfg = DOMAIN_CONFIG[domainKey] || DOMAIN_CONFIG['world-building'];
+  const IconComponent = domainCfg.icon || Globe;
+  const nodeColor = nodeData?.color || domainCfg.color || '#D97706';
+  const labelText = nodeData?.label || 'Chưa đặt tên';
 
   return (
     <div
@@ -113,7 +119,6 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
       style={{
         borderColor: nodeColor,
         backgroundColor: domainCfg.bgColor,
-        ...(selected ? { ringColor: nodeColor } : {}),
       }}
     >
       {/* Handles on all 4 sides */}
@@ -152,14 +157,14 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
       <div className="flex flex-col text-left overflow-hidden flex-1 min-w-0">
         <span
           className="font-bold text-xs text-[var(--color-ink-primary)] truncate leading-tight"
-          title={nodeData.label}
+          title={labelText}
         >
-          {nodeData.label}
+          {labelText}
         </span>
         <span className="text-[9px] font-semibold mt-0.5" style={{ color: nodeColor }}>
           {domainCfg.label}
         </span>
-        {nodeData.description && (
+        {nodeData?.description && (
           <span
             className="text-[9px] text-[var(--color-ink-tertiary)] truncate mt-0.5"
             title={nodeData.description}
@@ -169,61 +174,6 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
         )}
       </div>
     </div>
-  );
-};
-
-// ======== Custom Labeled Edge ========
-const LabeledEdge: React.FC<EdgeProps> = ({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  data,
-  style,
-  markerEnd,
-}) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  });
-
-  const edgeData = data as { label?: string; relationshipType?: string; color?: string } | undefined;
-  const relType = RELATIONSHIP_TYPES.find((r) => r.value === edgeData?.relationshipType);
-  const edgeColor = edgeData?.color || relType?.color || '#6B7280';
-
-  return (
-    <>
-      <BaseEdge
-        path={edgePath}
-        style={{
-          ...style,
-          stroke: edgeColor,
-          strokeWidth: 2,
-        }}
-        markerEnd={markerEnd}
-      />
-      {edgeData?.label && (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'all',
-            }}
-            className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm text-[var(--color-ink-primary)] whitespace-nowrap"
-          >
-            {edgeData.label}
-          </div>
-        </EdgeLabelRenderer>
-      )}
-    </>
   );
 };
 
@@ -255,55 +205,53 @@ export const WorldBibleDiagram: React.FC = () => {
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const nodeTypes = useMemo(() => ({ concept: ConceptNode }), []);
-  const edgeTypes = useMemo(() => ({ labeled: LabeledEdge }), []);
 
   // Build initial nodes from saved diagram data + extracted categories
   const diagramData = project.worldBibleDiagram || { nodes: [], edges: [] };
   const categories = project.extractedCategories || [];
 
   const buildInitialNodes = useCallback((): Node[] => {
-    const savedNodes = diagramData.nodes || [];
-    // If there are saved nodes, use them
+    const savedNodes = diagramData?.nodes || [];
     if (savedNodes.length > 0) {
       return savedNodes.map((n) => ({
-        id: n.id,
+        id: String(n.id),
         type: 'concept',
-        position: n.position,
+        position: n.position || { x: 300, y: 200 },
         data: {
-          label: n.data.label,
-          domain: n.data.domain,
-          color: n.data.color,
-          description: n.data.description,
-          categoryId: n.data.categoryId,
+          label: n.data?.label || 'Chưa đặt tên',
+          domain: n.data?.domain || 'world-building',
+          color: n.data?.color,
+          description: n.data?.description,
+          categoryId: n.data?.categoryId,
         },
       }));
     }
 
-    // Otherwise auto-generate from extracted categories
+    // Auto-generate from extracted categories if no saved nodes
     const total = categories.length || 1;
     return categories.map((cat, index) => {
       const angle = (index / total) * 2 * Math.PI;
-      const radius = Math.max(250, total * 50);
-      const x = 500 + radius * Math.cos(angle);
-      const y = 400 + radius * Math.sin(angle);
+      const radius = Math.max(220, total * 45);
+      const x = 450 + radius * Math.cos(angle);
+      const y = 350 + radius * Math.sin(angle);
 
       return {
-        id: cat.id,
+        id: String(cat.id || uuidv4()),
         type: 'concept',
         position: { x, y },
         data: {
-          label: cat.name,
-          domain: cat.domain,
+          label: cat.name || 'Danh mục',
+          domain: cat.domain || 'world-building',
           color: undefined,
           description: undefined,
           categoryId: cat.id,
         },
       };
     });
-  }, [diagramData.nodes, categories]);
+  }, [diagramData?.nodes, categories]);
 
   const buildInitialEdges = useCallback((): Edge[] => {
-    const savedEdges = diagramData.edges || [];
+    const savedEdges = diagramData?.edges || [];
     return savedEdges.map((e) => {
       const relType = RELATIONSHIP_TYPES.find((r) => r.value === e.relationshipType);
       const edgeColor = e.color || relType?.color || '#6B7280';
@@ -313,16 +261,16 @@ export const WorldBibleDiagram: React.FC = () => {
         e.relationshipType === 'dependency';
 
       return {
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        type: 'labeled',
+        id: String(e.id),
+        source: String(e.source),
+        target: String(e.target),
+        label: e.label || '',
         animated: e.animated || e.relationshipType === 'evolution',
-        data: {
-          label: e.label || '',
-          relationshipType: e.relationshipType,
-          color: edgeColor,
-        },
+        style: { stroke: edgeColor, strokeWidth: 2 },
+        labelStyle: { fill: 'var(--color-ink-primary)', fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.95 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 6,
         markerEnd: isDirected
           ? {
               type: MarkerType.ArrowClosed,
@@ -331,15 +279,20 @@ export const WorldBibleDiagram: React.FC = () => {
               height: 16,
             }
           : undefined,
+        data: {
+          label: e.label || '',
+          relationshipType: e.relationshipType,
+          color: edgeColor,
+        },
       };
     });
-  }, [diagramData.edges]);
+  }, [diagramData?.edges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(buildInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(buildInitialEdges());
   const isInternalUpdateRef = useRef(false);
 
-  // Sync when diagramData changes (from projectStore or external)
+  // Sync when diagramData changes (from external or project load)
   useEffect(() => {
     if (isInternalUpdateRef.current) {
       isInternalUpdateRef.current = false;
@@ -361,7 +314,7 @@ export const WorldBibleDiagram: React.FC = () => {
     if (domainFilter === 'all') return new Set(nodes.map((n) => n.id));
     return new Set(
       nodes
-        .filter((n) => (n.data as ConceptNodeData).domain === domainFilter)
+        .filter((n) => (n.data as any)?.domain === domainFilter)
         .map((n) => n.id)
     );
   }, [nodes, domainFilter]);
@@ -382,11 +335,11 @@ export const WorldBibleDiagram: React.FC = () => {
       id: n.id,
       position: n.position,
       data: {
-        label: (n.data as ConceptNodeData).label,
-        domain: (n.data as ConceptNodeData).domain,
-        color: (n.data as ConceptNodeData).color,
-        description: (n.data as ConceptNodeData).description,
-        categoryId: (n.data as ConceptNodeData).categoryId,
+        label: (n.data as any)?.label || '',
+        domain: (n.data as any)?.domain || 'world-building',
+        color: (n.data as any)?.color,
+        description: (n.data as any)?.description,
+        categoryId: (n.data as any)?.categoryId,
       },
     }));
 
@@ -394,7 +347,7 @@ export const WorldBibleDiagram: React.FC = () => {
       id: e.id,
       source: e.source,
       target: e.target,
-      label: (e.data as any)?.label || '',
+      label: (e.data as any)?.label || (e.label as string) || '',
       relationshipType: (e.data as any)?.relationshipType || 'related',
       color: (e.data as any)?.color,
       animated: e.animated,
@@ -418,15 +371,12 @@ export const WorldBibleDiagram: React.FC = () => {
   }, [nodes, edges, saveDiagram]);
 
   // ---- Connection handler: open modal to name the relationship ----
-  const onConnect = useCallback(
-    (params: Connection) => {
-      setPendingConnection(params);
-      setEdgeLabel('');
-      setEdgeRelType('related');
-      setShowEdgeModal(true);
-    },
-    []
-  );
+  const onConnect = useCallback((params: Connection) => {
+    setPendingConnection(params);
+    setEdgeLabel('');
+    setEdgeRelType('related');
+    setShowEdgeModal(true);
+  }, []);
 
   const handleConfirmEdge = useCallback(
     (e: React.FormEvent) => {
@@ -446,13 +396,13 @@ export const WorldBibleDiagram: React.FC = () => {
         target: pendingConnection.target!,
         sourceHandle: pendingConnection.sourceHandle,
         targetHandle: pendingConnection.targetHandle,
-        type: 'labeled',
+        label: edgeLabel.trim(),
         animated: edgeRelType === 'evolution',
-        data: {
-          label: edgeLabel.trim(),
-          relationshipType: edgeRelType,
-          color: edgeColor,
-        },
+        style: { stroke: edgeColor, strokeWidth: 2 },
+        labelStyle: { fill: 'var(--color-ink-primary)', fontSize: 11, fontWeight: 600 },
+        labelBgStyle: { fill: 'var(--color-surface)', fillOpacity: 0.95 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 6,
         markerEnd: isDirected
           ? {
               type: MarkerType.ArrowClosed,
@@ -461,6 +411,11 @@ export const WorldBibleDiagram: React.FC = () => {
               height: 16,
             }
           : undefined,
+        data: {
+          label: edgeLabel.trim(),
+          relationshipType: edgeRelType,
+          color: edgeColor,
+        },
       };
 
       setEdges((eds) => [...eds, newEdge]);
@@ -471,16 +426,13 @@ export const WorldBibleDiagram: React.FC = () => {
   );
 
   // ---- Edit edge on double-click ----
-  const onEdgeDoubleClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      setEditingEdge(edge);
-      const edgeData = edge.data as { label?: string; relationshipType?: string } | undefined;
-      setEdgeLabel(edgeData?.label || '');
-      setEdgeRelType(edgeData?.relationshipType || 'related');
-      setShowEdgeModal(true);
-    },
-    []
-  );
+  const onEdgeDoubleClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setEditingEdge(edge);
+    const edgeData = edge.data as { label?: string; relationshipType?: string } | undefined;
+    setEdgeLabel(edgeData?.label || (edge.label as string) || '');
+    setEdgeRelType(edgeData?.relationshipType || 'related');
+    setShowEdgeModal(true);
+  }, []);
 
   const handleUpdateEdge = useCallback(
     (e: React.FormEvent) => {
@@ -499,12 +451,9 @@ export const WorldBibleDiagram: React.FC = () => {
           ed.id === editingEdge.id
             ? {
                 ...ed,
+                label: edgeLabel.trim(),
                 animated: edgeRelType === 'evolution',
-                data: {
-                  label: edgeLabel.trim(),
-                  relationshipType: edgeRelType,
-                  color: edgeColor,
-                },
+                style: { stroke: edgeColor, strokeWidth: 2 },
                 markerEnd: isDirected
                   ? {
                       type: MarkerType.ArrowClosed,
@@ -513,6 +462,11 @@ export const WorldBibleDiagram: React.FC = () => {
                       height: 16,
                     }
                   : undefined,
+                data: {
+                  label: edgeLabel.trim(),
+                  relationshipType: edgeRelType,
+                  color: edgeColor,
+                },
               }
             : ed
         )
@@ -540,8 +494,8 @@ export const WorldBibleDiagram: React.FC = () => {
         id: uuidv4(),
         type: 'concept',
         position: {
-          x: 300 + Math.random() * 400,
-          y: 200 + Math.random() * 300,
+          x: 300 + Math.random() * 300,
+          y: 200 + Math.random() * 250,
         },
         data: {
           label: newNodeLabel.trim(),
@@ -563,26 +517,24 @@ export const WorldBibleDiagram: React.FC = () => {
   // ---- Sync categories into diagram (import missing categories as nodes) ----
   const handleSyncCategories = useCallback(() => {
     const existingCatIds = new Set(
-      nodes
-        .map((n) => (n.data as ConceptNodeData).categoryId)
-        .filter(Boolean)
+      nodes.map((n) => (n.data as any)?.categoryId).filter(Boolean)
     );
 
     const newCatNodes: Node[] = categories
       .filter((cat) => !existingCatIds.has(cat.id))
       .map((cat, index) => {
         const angle = (index / Math.max(categories.length, 1)) * 2 * Math.PI;
-        const radius = 200;
+        const radius = 220;
         return {
-          id: cat.id,
+          id: String(cat.id),
           type: 'concept' as const,
           position: {
-            x: 500 + radius * Math.cos(angle) + Math.random() * 50,
-            y: 400 + radius * Math.sin(angle) + Math.random() * 50,
+            x: 450 + radius * Math.cos(angle) + Math.random() * 40,
+            y: 350 + radius * Math.sin(angle) + Math.random() * 40,
           },
           data: {
-            label: cat.name,
-            domain: cat.domain,
+            label: cat.name || 'Danh mục mới',
+            domain: cat.domain || 'world-building',
             categoryId: cat.id,
           },
         };
@@ -606,14 +558,11 @@ export const WorldBibleDiagram: React.FC = () => {
   }, [nodes, setNodes, setEdges]);
 
   // ---- Rename node on double-click ----
-  const onNodeDoubleClick = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
-      setEditingNodeId(node.id);
-      setEditingNodeLabel((node.data as ConceptNodeData).label);
-      setTimeout(() => editInputRef.current?.focus(), 50);
-    },
-    []
-  );
+  const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
+    setEditingNodeId(node.id);
+    setEditingNodeLabel((node.data as any)?.label || '');
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  }, []);
 
   const handleSaveNodeLabel = useCallback(() => {
     if (!editingNodeId || !editingNodeLabel.trim()) {
@@ -730,11 +679,11 @@ export const WorldBibleDiagram: React.FC = () => {
         <div className="flex items-center gap-1.5 font-semibold text-[var(--color-ink-secondary)] mb-0.5">
           <Link2 size={12} /> Hướng dẫn thao tác
         </div>
-        <div>• <strong>Kéo thả</strong> để di chuyển nút</div>
+        <div>• <strong>Kéo thả</strong> để di chuyển vị trí nút</div>
         <div>• <strong>Kéo từ ⚫ chấm tròn</strong> trên nút sang nút khác để tạo liên kết</div>
-        <div>• <strong>Nhấp đúp vào nút</strong> để đổi tên</div>
-        <div>• <strong>Nhấp đúp vào đường nối</strong> để sửa / xoá quan hệ</div>
-        <div>• Chọn nút rồi nhấn <strong>Delete</strong> để xoá</div>
+        <div>• <strong>Nhấp đúp vào nút</strong> để đổi tên nhanh</div>
+        <div>• <strong>Nhấp đúp vào đường nối</strong> để sửa hoặc xoá quan hệ</div>
+        <div>• Chọn nút rồi nhấn <strong>Delete / Backspace</strong> để xoá</div>
       </div>
 
       {/* ---- Empty State ---- */}
@@ -767,7 +716,6 @@ export const WorldBibleDiagram: React.FC = () => {
           nodes={filteredNodes}
           edges={filteredEdges}
           nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -776,13 +724,12 @@ export const WorldBibleDiagram: React.FC = () => {
           fitView
           deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode="Shift"
-          defaultEdgeOptions={{ type: 'labeled' }}
         >
           <Controls className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-md" />
           <MiniMap
-            nodeColor={(n) => {
-              const d = (n.data as ConceptNodeData).domain;
-              return DOMAIN_CONFIG[d]?.color || '#D97706';
+            nodeColor={(n: any) => {
+              const d = n?.data?.domain;
+              return (d && DOMAIN_CONFIG[d]?.color) || '#D97706';
             }}
             className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-md"
           />

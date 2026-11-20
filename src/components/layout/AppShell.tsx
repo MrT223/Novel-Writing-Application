@@ -13,6 +13,7 @@ import { RelationshipGraph } from '@/components/worldbible/RelationshipGraph';
 import { PureDomainEditor } from '@/components/editor/PureDomainEditor';
 import { CategoryMatrixView } from '@/components/worldbible/CategoryMatrixView';
 import { WorldBibleDiagram } from '@/components/worldbible/WorldBibleDiagram';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 
 export const AppShell: React.FC = () => {
   const { tabs, activeTabId, openTab } = useTabStore();
@@ -90,7 +91,9 @@ export const AppShell: React.FC = () => {
 
         {/* Content Viewport */}
         <main className="flex-1 overflow-hidden relative flex flex-col">
-          {renderContent()}
+          <ErrorBoundary key={activeTabId || 'no-tab'}>
+            {renderContent()}
+          </ErrorBoundary>
         </main>
 
         {/* Bottom Status Bar (Hidden in Zen Mode) */}
