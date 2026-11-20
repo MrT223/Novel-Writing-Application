@@ -18,6 +18,7 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   BaseEdge,
+  MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useProjectStore } from '@/stores/projectStore';
@@ -38,6 +39,7 @@ import {
   Save,
   ArrowDownUp,
   Sparkles,
+  Table,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
@@ -118,24 +120,24 @@ const ConceptNode: React.FC<NodeProps> = ({ data, selected }) => {
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-3 !h-3 !bg-[var(--color-accent)] opacity-0 group-hover:opacity-80 transition-opacity !border-2 !border-white"
+        className="!w-3.5 !h-3.5 !bg-[var(--color-accent)] opacity-40 group-hover:opacity-100 group-hover:scale-125 transition-all !border-2 !border-white shadow-xs cursor-crosshair"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-3 !h-3 !bg-[var(--color-accent)] opacity-0 group-hover:opacity-80 transition-opacity !border-2 !border-white"
+        className="!w-3.5 !h-3.5 !bg-[var(--color-accent)] opacity-40 group-hover:opacity-100 group-hover:scale-125 transition-all !border-2 !border-white shadow-xs cursor-crosshair"
       />
       <Handle
         type="target"
         position={Position.Left}
         id="left"
-        className="!w-3 !h-3 !bg-[var(--color-accent)] opacity-0 group-hover:opacity-80 transition-opacity !border-2 !border-white"
+        className="!w-3.5 !h-3.5 !bg-[var(--color-accent)] opacity-40 group-hover:opacity-100 group-hover:scale-125 transition-all !border-2 !border-white shadow-xs cursor-crosshair"
       />
       <Handle
         type="source"
         position={Position.Right}
         id="right"
-        className="!w-3 !h-3 !bg-[var(--color-accent)] opacity-0 group-hover:opacity-80 transition-opacity !border-2 !border-white"
+        className="!w-3.5 !h-3.5 !bg-[var(--color-accent)] opacity-40 group-hover:opacity-100 group-hover:scale-125 transition-all !border-2 !border-white shadow-xs cursor-crosshair"
       />
 
       {/* Icon */}
@@ -304,6 +306,12 @@ export const WorldBibleDiagram: React.FC = () => {
     const savedEdges = diagramData.edges || [];
     return savedEdges.map((e) => {
       const relType = RELATIONSHIP_TYPES.find((r) => r.value === e.relationshipType);
+      const edgeColor = e.color || relType?.color || '#6B7280';
+      const isDirected =
+        e.relationshipType === 'parent-child' ||
+        e.relationshipType === 'evolution' ||
+        e.relationshipType === 'dependency';
+
       return {
         id: e.id,
         source: e.source,
@@ -313,22 +321,38 @@ export const WorldBibleDiagram: React.FC = () => {
         data: {
           label: e.label || '',
           relationshipType: e.relationshipType,
-          color: e.color || relType?.color,
+          color: edgeColor,
         },
-        markerEnd: e.relationshipType === 'parent-child' ? { type: 'arrowclosed' as const } : undefined,
+        markerEnd: isDirected
+          ? {
+              type: MarkerType.ArrowClosed,
+              color: edgeColor,
+              width: 16,
+              height: 16,
+            }
+          : undefined,
       };
     });
   }, [diagramData.edges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(buildInitialNodes());
   const [edges, setEdges, onEdgesChange] = useEdgesState(buildInitialEdges());
+  const isInternalUpdateRef = useRef(false);
 
-  // Sync when diagramData changes
+  // Sync when diagramData changes (from projectStore or external)
   useEffect(() => {
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
     setNodes(buildInitialNodes());
   }, [buildInitialNodes, setNodes]);
 
   useEffect(() => {
+    if (isInternalUpdateRef.current) {
+      isInternalUpdateRef.current = false;
+      return;
+    }
     setEdges(buildInitialEdges());
   }, [buildInitialEdges, setEdges]);
 
@@ -353,6 +377,7 @@ export const WorldBibleDiagram: React.FC = () => {
 
   // ---- Save to project ----
   const saveDiagram = useCallback(() => {
+    isInternalUpdateRef.current = true;
     const diagramNodes: WorldBibleDiagramNode[] = nodes.map((n) => ({
       id: n.id,
       position: n.position,
@@ -409,6 +434,12 @@ export const WorldBibleDiagram: React.FC = () => {
       if (!pendingConnection) return;
 
       const relType = RELATIONSHIP_TYPES.find((r) => r.value === edgeRelType);
+      const edgeColor = relType?.color || '#6B7280';
+      const isDirected =
+        edgeRelType === 'parent-child' ||
+        edgeRelType === 'evolution' ||
+        edgeRelType === 'dependency';
+
       const newEdge: Edge = {
         id: `edge-${uuidv4()}`,
         source: pendingConnection.source!,
@@ -420,12 +451,16 @@ export const WorldBibleDiagram: React.FC = () => {
         data: {
           label: edgeLabel.trim(),
           relationshipType: edgeRelType,
-          color: relType?.color,
+          color: edgeColor,
         },
-        markerEnd:
-          edgeRelType === 'parent-child'
-            ? { type: 'arrowclosed' as const }
-            : undefined,
+        markerEnd: isDirected
+          ? {
+              type: MarkerType.ArrowClosed,
+              color: edgeColor,
+              width: 16,
+              height: 16,
+            }
+          : undefined,
       };
 
       setEdges((eds) => [...eds, newEdge]);
@@ -453,6 +488,12 @@ export const WorldBibleDiagram: React.FC = () => {
       if (!editingEdge) return;
 
       const relType = RELATIONSHIP_TYPES.find((r) => r.value === edgeRelType);
+      const edgeColor = relType?.color || '#6B7280';
+      const isDirected =
+        edgeRelType === 'parent-child' ||
+        edgeRelType === 'evolution' ||
+        edgeRelType === 'dependency';
+
       setEdges((eds) =>
         eds.map((ed) =>
           ed.id === editingEdge.id
@@ -462,12 +503,16 @@ export const WorldBibleDiagram: React.FC = () => {
                 data: {
                   label: edgeLabel.trim(),
                   relationshipType: edgeRelType,
-                  color: relType?.color,
+                  color: edgeColor,
                 },
-                markerEnd:
-                  edgeRelType === 'parent-child'
-                    ? { type: 'arrowclosed' as const }
-                    : undefined,
+                markerEnd: isDirected
+                  ? {
+                      type: MarkerType.ArrowClosed,
+                      color: edgeColor,
+                      width: 16,
+                      height: 16,
+                    }
+                  : undefined,
               }
             : ed
         )
@@ -663,6 +708,21 @@ export const WorldBibleDiagram: React.FC = () => {
           <Save size={13} />
           Lưu
         </button>
+
+        {/* Switch to Matrix Table View */}
+        <button
+          onClick={() =>
+            openTab({
+              type: 'category-matrix',
+              title: 'Bảng Tổng Hợp Danh Mục',
+            })
+          }
+          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-border)] hover:border-[var(--color-accent)] text-xs font-medium text-[var(--color-ink-primary)] transition-all ml-auto"
+          title="Xem dưới dạng bảng danh mục trích xuất"
+        >
+          <Table size={13} className="text-[var(--color-accent)]" />
+          Xem Dạng Bảng
+        </button>
       </div>
 
       {/* ---- Instruction hint (bottom-left) ---- */}
@@ -714,7 +774,7 @@ export const WorldBibleDiagram: React.FC = () => {
           onEdgeDoubleClick={onEdgeDoubleClick}
           onNodeDoubleClick={onNodeDoubleClick}
           fitView
-          deleteKeyCode="Delete"
+          deleteKeyCode={['Delete', 'Backspace']}
           multiSelectionKeyCode="Shift"
           defaultEdgeOptions={{ type: 'labeled' }}
         >

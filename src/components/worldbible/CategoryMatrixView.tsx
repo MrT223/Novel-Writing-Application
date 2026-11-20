@@ -15,6 +15,7 @@ import {
   Sparkles,
   ExternalLink,
   Search,
+  Network,
 } from 'lucide-react';
 import type { ExtractedCategoryItem } from '@/types';
 
@@ -138,6 +139,21 @@ export const CategoryMatrixView: React.FC<CategoryMatrixViewProps> = ({
             <option value="faction">Thế Lực / Bang Phái</option>
             <option value="plot">Cốt Truyện</option>
           </select>
+
+          {/* Nút chuyển nhanh sang Sơ đồ khái niệm kéo thả */}
+          <button
+            onClick={() =>
+              openTab({
+                type: 'world-bible-diagram',
+                title: 'Sơ Đồ Khái Niệm Bối Cảnh',
+              })
+            }
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-accent)] text-white text-xs font-semibold hover:bg-[var(--color-accent-hover)] transition-colors shadow-2xs whitespace-nowrap"
+            title="Mở sơ đồ khái niệm kéo thả"
+          >
+            <Network size={14} />
+            <span>Xem Dạng Sơ Đồ</span>
+          </button>
         </div>
       </div>
 
