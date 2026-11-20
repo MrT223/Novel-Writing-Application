@@ -12,6 +12,7 @@ import {
   Plus,
   ArrowRight,
   BookOpen,
+  Network,
 } from 'lucide-react';
 
 export const WorldBiblePanel: React.FC = () => {
@@ -44,6 +45,17 @@ export const WorldBiblePanel: React.FC = () => {
             className="px-4 py-2 text-xs font-semibold rounded-lg bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex items-center gap-2 shadow-sm"
           >
             <GitFork size={15} /> Mở Sơ Đồ Mạng Lưới Quan Hệ
+          </button>
+          <button
+            onClick={() =>
+              openTab({
+                type: 'world-bible-diagram',
+                title: 'Sơ Đồ Khái Niệm Bối Cảnh',
+              })
+            }
+            className="px-4 py-2 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <Network size={15} /> Sơ Đồ Khái Niệm Bối Cảnh
           </button>
         </div>
       </div>

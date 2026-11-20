@@ -26,6 +26,7 @@ import {
   Globe,
   Download,
   Upload,
+  Network,
 } from 'lucide-react';
 import { ExportModal } from '@/components/common/ExportModal';
 
@@ -307,6 +308,20 @@ export const Sidebar: React.FC = () => {
           >
             <Table size={15} className="text-[var(--color-accent)]" />
             <span>Bảng Dữ Liệu Trực Quan Hóa</span>
+          </div>
+
+          {/* Nút mở Sơ đồ khái niệm bối cảnh */}
+          <div
+            onClick={() =>
+              openTab({
+                type: 'world-bible-diagram',
+                title: 'Sơ Đồ Khái Niệm Bối Cảnh',
+              })
+            }
+            className="flex items-center gap-2 p-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink-primary)] font-semibold text-xs cursor-pointer hover:border-[var(--color-accent)] transition-all shadow-2xs"
+          >
+            <Network size={15} className="text-purple-500" />
+            <span>Sơ Đồ Khái Niệm Bối Cảnh</span>
           </div>
 
           {/* Section: Thiết Lập Bối Cảnh (Hệ thống sức mạnh, World Building, Thế lực, Cốt truyện) */}

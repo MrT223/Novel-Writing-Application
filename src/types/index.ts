@@ -60,6 +60,7 @@ export type TabType =
   | 'timeline'
   | 'world-bible'
   | 'diagram'
+  | 'world-bible-diagram'
   | 'notes';
 
 export interface Tab {
@@ -96,6 +97,7 @@ export interface Project {
   factions: Faction[];
   locations: Location[];
   loreArticles?: WorldLoreArticle[];
+  worldBibleDiagram?: WorldBibleDiagramData;
   timelineEvents: TimelineEvent[];
   crossLinks: CrossLinkEntry[];
   notes: Note[];
@@ -259,6 +261,34 @@ export interface Note {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- World Bible Concept Diagram (Sơ đồ khái niệm bối cảnh) ----
+export interface WorldBibleDiagramNode {
+  id: string;
+  position: { x: number; y: number };
+  data: {
+    label: string;
+    domain: 'power-system' | 'world-building' | 'faction' | 'plot';
+    categoryId?: string; // Link to ExtractedCategoryItem
+    color?: string;
+    description?: string;
+  };
+}
+
+export interface WorldBibleDiagramEdge {
+  id: string;
+  source: string;
+  target: string;
+  label?: string;
+  relationshipType: 'related' | 'parent-child' | 'dependency' | 'conflict' | 'evolution' | 'custom';
+  color?: string;
+  animated?: boolean;
+}
+
+export interface WorldBibleDiagramData {
+  nodes: WorldBibleDiagramNode[];
+  edges: WorldBibleDiagramEdge[];
 }
 
 // ---- Diagram ----

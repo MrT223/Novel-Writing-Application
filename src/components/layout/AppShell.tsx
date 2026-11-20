@@ -12,6 +12,7 @@ import { WorldBiblePanel } from '@/components/worldbible/WorldBiblePanel';
 import { RelationshipGraph } from '@/components/worldbible/RelationshipGraph';
 import { PureDomainEditor } from '@/components/editor/PureDomainEditor';
 import { CategoryMatrixView } from '@/components/worldbible/CategoryMatrixView';
+import { WorldBibleDiagram } from '@/components/worldbible/WorldBibleDiagram';
 
 export const AppShell: React.FC = () => {
   const { tabs, activeTabId, openTab } = useTabStore();
@@ -67,6 +68,8 @@ export const AppShell: React.FC = () => {
         return <PureDomainEditor domain="plot" />;
       case 'category-matrix':
         return <CategoryMatrixView />;
+      case 'world-bible-diagram':
+        return <WorldBibleDiagram />;
       case 'relationship-graph':
         return <RelationshipGraph />;
       case 'world-bible':

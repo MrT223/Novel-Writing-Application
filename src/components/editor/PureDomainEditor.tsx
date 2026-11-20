@@ -33,6 +33,7 @@ import {
   Sparkles,
   Table as TableIcon,
   Check,
+  Network,
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type { ExtractedCategoryItem, ExtractedDetail } from '@/types';
@@ -279,19 +280,34 @@ export const PureDomainEditor: React.FC<PureDomainEditorProps> = ({ domain }) =>
             </div>
 
             {/* Nút xem bảng tổng hợp dữ liệu trích xuất của riêng mục này */}
-            <button
-              onClick={() =>
-                openTab({
-                  type: 'category-matrix',
-                  title: `Bảng Dữ Liệu: ${domainInfo.title}`,
-                })
-              }
-              className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink-primary)] hover:border-[var(--color-accent)] flex items-center gap-1.5 shadow-2xs"
-              title="Xem bảng trực quan các danh mục đã trích xuất"
-            >
-              <TableIcon size={14} className="text-[var(--color-accent)]" />
-              <span>Xem Dạng Bảng ({domainCategories.length})</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  openTab({
+                    type: 'world-bible-diagram',
+                    title: 'Sơ Đồ Khái Niệm Bối Cảnh',
+                  })
+                }
+                className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink-primary)] hover:border-purple-400 flex items-center gap-1.5 shadow-2xs"
+                title="Xem sơ đồ khái niệm kéo thả"
+              >
+                <Network size={14} className="text-purple-500" />
+                <span>Sơ Đồ</span>
+              </button>
+              <button
+                onClick={() =>
+                  openTab({
+                    type: 'category-matrix',
+                    title: `Bảng Dữ Liệu: ${domainInfo.title}`,
+                  })
+                }
+                className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink-primary)] hover:border-[var(--color-accent)] flex items-center gap-1.5 shadow-2xs"
+                title="Xem bảng trực quan các danh mục đã trích xuất"
+              >
+                <TableIcon size={14} className="text-[var(--color-accent)]" />
+                <span>Xem Dạng Bảng ({domainCategories.length})</span>
+              </button>
+            </div>
           </div>
 
           {/* TipTap Editor Surface */}
